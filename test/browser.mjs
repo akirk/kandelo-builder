@@ -1,0 +1,38 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({channel:'chrome',headless:true});
+try{
+const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto(process.env.BUILDER_URL||'http://127.0.0.1:5188');
+await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));
+await page.getByRole('button',{name:'Run Python',exact:false}).click();
+await page.waitForFunction(()=>document.querySelector('#step-count').textContent==='3 steps');await page.getByRole('button',{name:'Run Python A little code',exact:false}).click();assert.equal(await page.getByRole('button',{name:'Remove Run Python',exact:true}).count(),1);
+await page.getByLabel('Python code',{exact:true}).fill('print("Edited")');
+await page.getByRole('button',{name:'Run Python A little code',exact:false}).click();assert.equal(await page.getByRole('button',{name:'Remove Run Python',exact:true}).count(),2);await page.getByRole('button',{name:'Remove Run Python',exact:true}).last().click();
+await page.getByLabel('Kandelo filesystem').selectOption('python');
+await page.waitForFunction(()=>document.querySelector('#descriptor').textContent.includes('python.vfs.zst'));
+await page.reload();await page.waitForFunction(()=>document.querySelector('#step-count').textContent==='3 steps');
+await page.getByRole('button',{name:'Move up: Run Python',exact:true}).click();
+await page.waitForFunction(()=>document.querySelector('#script').textContent.indexOf('Run Python')<document.querySelector('#script').textContent.indexOf('Create a file'));
+await page.getByRole('button',{name:'Remove Run Python',exact:true}).click();
+await page.getByLabel('Computer name').fill('A new name');
+await page.waitForFunction(()=>document.querySelector('#descriptor').textContent.includes('A new name'));
+await page.getByLabel('Prompt style').selectOption('green');
+await page.waitForFunction(()=>document.querySelector('#script').textContent.includes('exec bash --noprofile --rcfile'));
+assert.ok((await page.getByLabel('PS1', {exact:true}).inputValue()).includes('32m')); 
+await page.getByLabel('PS1', {exact:true}).fill(String.raw`\w > `);
+await page.waitForFunction(()=>document.querySelector('#script').textContent.includes(String.raw`\w > `));
+page.once('dialog',dialog=>dialog.accept('My saved prompt'));await page.getByRole('button',{name:'Save prompt',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#prompt-select').selectedOptions[0]?.textContent==='My saved prompt');await page.reload();await page.getByLabel('PS1', {exact:true}).waitFor();assert.equal(await page.getByLabel('Prompt style').inputValue(),'saved:0');assert.equal(await page.getByLabel('PS1', {exact:true}).inputValue(),String.raw`\w > `);
+await page.getByRole('button',{name:'Clone a repository Bring a project',exact:false}).click();
+await page.getByLabel('Clone folder (optional)').fill('my-project');assert.equal(await page.getByLabel('Show Git output',{exact:true}).isChecked(),false);await page.waitForFunction(()=>document.querySelector('#script').textContent.includes('git clone --quiet'));await page.getByLabel('Show Git output',{exact:true}).check();await page.waitForFunction(()=>document.querySelector('#script').textContent.includes("git clone -- '"));
+await page.waitForFunction(()=>document.querySelector('#script').textContent.includes("cd 'my-project'"));
+assert.equal(await page.getByLabel('Print README.md',{exact:true}).isChecked(),false);await page.getByLabel('Print README.md',{exact:true}).check();await page.waitForFunction(()=>document.querySelector('#script').textContent.includes("cat './README.md'"));
+await page.getByLabel('cd into the cloned directory',{exact:true}).uncheck();
+await page.waitForFunction(()=>!document.querySelector('#script').textContent.includes("cd 'my-project'"));
+await page.waitForFunction(()=>document.querySelector('#builder-link').value===location.href && location.hash.startsWith('#recipe1='));
+const sharedUrl=page.url();const recipient=await browser.newContext();const sharedPage=await recipient.newPage();await sharedPage.goto(sharedUrl);await sharedPage.waitForFunction(()=>document.querySelector('#title').value==='A new name');assert.equal(await sharedPage.getByLabel('PS1',{exact:true}).inputValue(),String.raw`\w > `);assert.equal(await sharedPage.getByLabel('Clone folder (optional)').inputValue(),'my-project');await recipient.close();
+await page.screenshot({path:'/tmp/kandelo-builder-desktop.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.screenshot({path:'/tmp/kandelo-builder-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
+console.log('Browser checks passed: generate, add, reorder, remove, switch VFS, persist, rename, mobile layout; no page errors.');
+}finally{await browser.close();}
