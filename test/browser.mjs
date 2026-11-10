@@ -8,7 +8,7 @@ await page.addInitScript(stale=>localStorage.setItem('kandelo-builder.recipe.v1'
 await page.goto(process.env.BUILDER_URL||'http://127.0.0.1:5188');
 await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));
 assert.equal(new URL(page.url()).hash,'');assert.equal(new URL(await page.locator('#builder-link').inputValue()).hash,'');assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);
-await page.getByLabel('Computer name').fill('Temporary title');await page.waitForFunction(()=>location.hash.startsWith('#recipe1='));await page.getByLabel('Computer name').fill('My little computer');await page.waitForFunction(()=>location.hash==='');
+await page.getByLabel('Computer name').fill('Temporary title');await page.waitForFunction(()=>location.hash.startsWith('#v=1&'));await page.getByLabel('Computer name').fill('My little computer');await page.waitForFunction(()=>location.hash==='');
 await page.getByRole('button',{name:'Run Python',exact:false}).click();
 await page.waitForFunction(()=>document.querySelector('#step-count').textContent==='3 steps');await page.getByRole('button',{name:'Run Python A little code',exact:false}).click();assert.equal(await page.getByRole('button',{name:'Remove Run Python',exact:true}).count(),1);
 await page.getByLabel('Python code',{exact:true}).fill('print("Edited")');
@@ -33,7 +33,7 @@ await page.waitForFunction(()=>document.querySelector('#script').textContent.inc
 assert.equal(await page.getByLabel('Print README.md',{exact:true}).isChecked(),false);await page.getByLabel('Print README.md',{exact:true}).check();await page.waitForFunction(()=>document.querySelector('#script').textContent.includes("cat './README.md'"));
 await page.getByLabel('cd into the cloned directory',{exact:true}).uncheck();
 await page.waitForFunction(()=>!document.querySelector('#script').textContent.includes("cd 'my-project'"));
-await page.waitForFunction(()=>document.querySelector('#builder-link').value===location.href && location.hash.startsWith('#recipe1='));
+await page.waitForFunction(()=>document.querySelector('#builder-link').value===location.href && location.hash.startsWith('#v=1&'));
 const sharedUrl=page.url();const recipient=await browser.newContext();const sharedPage=await recipient.newPage();await sharedPage.goto(sharedUrl);await sharedPage.waitForFunction(()=>document.querySelector('#title').value==='A new name');assert.equal(await sharedPage.getByLabel('PS1',{exact:true}).inputValue(),String.raw`\w > `);assert.equal(await sharedPage.getByLabel('Clone folder (optional)').inputValue(),'my-project');await recipient.close();
 await page.getByRole('button',{name:'Bring my dotfiles Your aliases',exact:false}).click();
 await page.getByLabel('Dotfiles repository URL').fill('https://github.com/example/dotfiles.git');await page.getByLabel('Revision (optional)').fill('main');await page.getByLabel('File mappings').fill('bash/.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc');
@@ -46,7 +46,7 @@ await page.screenshot({path:'/tmp/kandelo-builder-mobile.png',fullPage:true});as
 assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);
 const editedUrl=page.url();const bareUrl=new URL(editedUrl);bareUrl.hash='';await page.goto(bareUrl.href);await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(new URL(page.url()).hash,'');
 await page.goto(editedUrl);await page.getByLabel('File mappings').waitFor();assert.equal(await page.getByLabel('Computer name').inputValue(),'A new name');
-page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'Reset to defaults'}).click();assert.ok(new URL(page.url()).hash.startsWith('#recipe1='));
+page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'Reset to defaults'}).click();assert.ok(new URL(page.url()).hash.startsWith('#v=1&'));
 page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Reset to defaults'}).click();
 await page.waitForFunction(()=>location.hash===''&&document.querySelector('#builder-link').value===location.href&&document.querySelector('#step-count').textContent==='2 steps');
 assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(await page.getByLabel('Prompt style').inputValue(),'image');
