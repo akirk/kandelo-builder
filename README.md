@@ -27,8 +27,8 @@ For another static host, run `npm run build` and serve `dist/` over HTTP(S). Do 
 - Editable steps with move-up/down and remove controls.
 - Live generated Bash script and inspectable boot descriptor.
 - Copy launch URL and open Kandelo in a separate tab.
-- Local draft persistence and versioned JSON recipe export/import.
-- The browser address stays clean for the default recipe and updates with a compressed `#recipe1=` configuration when the recipe changes; Copy builder link shares the editable recipe. A shared URL takes precedence over the recipient’s local draft. Saved prompt libraries stay local; the recipe carries its selected PS1 value. Builder links work on GitHub Pages without server routes.
+- URL-based recipe state and versioned JSON recipe export/import.
+- The browser address stays clean for the default recipe and updates with a compressed `#recipe1=` configuration when the recipe changes; Copy builder link shares the editable recipe. The URL is the only source for the current recipe; opening the bare builder URL always starts with defaults. Legacy local recipe drafts are removed on startup. Saved prompt libraries stay local; the recipe carries its selected PS1 value. Builder links work on GitHub Pages without server routes.
 - Editable Kandelo host, image directory and working directory.
 
 Every generated script clears startup output before running recipe steps, including an empty recipe. The welcome step also clears the terminal before showing its message, like the welcome demo in `../kandelo-demos`. Kandelo itself prints the full startup script before executing it.
@@ -41,7 +41,7 @@ Image presets refer to `https://kandelo.dev/vfs-groups/release-1/images/`. These
 
 Limits include 40 steps, 32 KiB compressed inline script, 64 KiB compressed descriptor and 300 KB imported recipe files. Links above 8 KiB get a transport warning. Recipes validate versions, step kinds, HTTP(S) URLs and absolute guest paths. Shell arguments are quoted and generated heredoc delimiters avoid collisions with file/script content. Arbitrary shell steps intentionally execute their authored code.
 
-A link reproduces a boot recipe, not modified disk state, running processes or terminal history. Its contents are readable by anyone receiving it. Drafts live only in this browser's clearable localStorage; export a JSON file to retain an editable recipe. No recipe content is uploaded by the builder. Running a link lets Kandelo fetch the referenced VFS and execute its startup script.
+A link reproduces a boot recipe, not modified disk state, running processes or terminal history. Its contents are readable by anyone receiving it. Recipes live in the URL; bookmark or copy the builder link, or export a JSON file to keep an editable recipe. Only named prompt presets are stored in localStorage. No recipe content is uploaded by the builder. Running a link lets Kandelo fetch the referenced VFS and execute its startup script.
 
 ## Validation
 
@@ -52,6 +52,6 @@ npm run build
 node test/browser.mjs
 ```
 
-Eleven model tests check Unicode transport, script hashes and byte lengths, VFS selection, ordering, quoting, heredoc collisions malformed recipes and prompt handoff syntax. The Chrome smoke check covers generated links, adding/reordering/removing steps, VFS switching, saved drafts, renaming and mobile overflow. Screenshots go to `/tmp/`.
+Eleven model tests check Unicode transport, script hashes and byte lengths, VFS selection, ordering, quoting, heredoc collisions malformed recipes and prompt handoff syntax. The Chrome smoke check covers generated links, adding/reordering/removing steps, VFS switching, URL restoration, renaming and mobile overflow. Screenshots go to `/tmp/`.
 
 A complete guest boot on the public Kandelo deployment and GitHub Pages publication have not been verified.

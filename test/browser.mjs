@@ -1,11 +1,13 @@
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
+import {defaults} from '../model.js';
 const browser=await chromium.launch({channel:'chrome',headless:true});
 try{
 const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.addInitScript(stale=>localStorage.setItem('kandelo-builder.recipe.v1',JSON.stringify(stale)),{...defaults(),title:'Old local draft'});
 await page.goto(process.env.BUILDER_URL||'http://127.0.0.1:5188');
 await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));
-assert.equal(new URL(page.url()).hash,'');assert.equal(new URL(await page.locator('#builder-link').inputValue()).hash,'');
+assert.equal(new URL(page.url()).hash,'');assert.equal(new URL(await page.locator('#builder-link').inputValue()).hash,'');assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);
 await page.getByLabel('Computer name').fill('Temporary title');await page.waitForFunction(()=>location.hash.startsWith('#recipe1='));await page.getByLabel('Computer name').fill('My little computer');await page.waitForFunction(()=>location.hash==='');
 await page.getByRole('button',{name:'Run Python',exact:false}).click();
 await page.waitForFunction(()=>document.querySelector('#step-count').textContent==='3 steps');await page.getByRole('button',{name:'Run Python A little code',exact:false}).click();assert.equal(await page.getByRole('button',{name:'Remove Run Python',exact:true}).count(),1);
@@ -41,6 +43,9 @@ await page.reload();await page.getByLabel('File mappings').waitFor();assert.equa
 await page.screenshot({path:'/tmp/kandelo-builder-desktop.png',fullPage:true});
 await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
 await page.screenshot({path:'/tmp/kandelo-builder-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
+assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);
+const editedUrl=page.url();const bareUrl=new URL(editedUrl);bareUrl.hash='';await page.goto(bareUrl.href);await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(new URL(page.url()).hash,'');
+await page.goto(editedUrl);await page.getByLabel('File mappings').waitFor();assert.equal(await page.getByLabel('Computer name').inputValue(),'A new name');
 page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'Reset to defaults'}).click();assert.ok(new URL(page.url()).hash.startsWith('#recipe1='));
 page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Reset to defaults'}).click();
 await page.waitForFunction(()=>location.hash===''&&document.querySelector('#builder-link').value===location.href&&document.querySelector('#step-count').textContent==='2 steps');
