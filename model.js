@@ -239,14 +239,85 @@ export async function build(state){
  const url=webUrl(state.host);url.hash='k1='+b64(packed);return {script,descriptor,url:url.href};
 }
 
-export async function encodeRecipe(state){validate(state);const base=defaults();if(Object.keys(base).every(key=>key==='steps'?state.steps.length===base.steps.length&&state.steps.every((step,i)=>sameStep(step,base.steps[i])):(state[key]??(key==='prompt'?'image':key==='customPs1'?'':undefined))===base[key]))return '';const raw=enc.encode(JSON.stringify(state));if(raw.length>300000)throw Error('Recipe exceeds the 300 KB builder link limit.');const packed=await gzip(raw);if(packed.length>65536)throw Error('Recipe is too large for a builder link. Export it instead.');return 'recipe1='+b64(packed);}
+const recipeFields = ['title','image','prompt','customPs1','customVfs','host','imageBase','cwd'];
+const stepFields = {
+ welcome:['code'],
+ command:['code'],
+ file:['path','content'],
+ python:['code'],
+ git:['url','directory','enterDirectory','printReadme','showOutput'],
+ dotfiles:['url','revision','mappings'],
+ perl:['code'],
+ scummvm:['game'],
+};
+const optionalStepFields = new Set(['directory','enterDirectory','printReadme','showOutput','revision','game']);
+
+export async function encodeRecipe(state){
+ validate(state);
+ const base=defaults();
+ const params=new URLSearchParams({v:'1'});
+ for(const field of recipeFields){
+  const value=state[field]??base[field];
+  if(value!==base[field])params.set(field,value);
+ }
+ const defaultSteps=state.steps.length===base.steps.length&&state.steps.every((step,i)=>sameStep(step,base.steps[i]));
+ if(!defaultSteps&&!state.steps.length)params.set('steps','0');
+ if(!defaultSteps)state.steps.forEach((step,index)=>{
+  const prefix='step.'+(index+1)+'.';
+  const template=library.find(item=>item.kind===step.kind);
+  params.set(prefix+'kind',step.kind);
+  for(const field of stepFields[step.kind]){
+   const value=step[field]??(typeof template[field]==='boolean'?false:'');
+   if(!optionalStepFields.has(field)||value!==template[field])params.set(prefix+field,String(value));
+  }
+ });
+ return params.size===1?'':params.toString();
+}
+
 export async function decodeRecipe(fragment){
  if(!fragment)return defaults();
- if(!fragment.startsWith('recipe1='))throw Error('Unsupported builder link version.');
- const encoded=fragment.slice(8);if(encoded.length>87384||!/^[A-Za-z0-9_-]+$/.test(encoded))throw Error('Invalid or oversized builder link.');
- const bytes=Uint8Array.from(atob(encoded.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
- const reader=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();let total=0;const chunks=[];
- try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>300000)throw Error('Builder recipe exceeds 300 KB.');chunks.push(value);}}catch(e){await reader.cancel().catch(()=>{});throw e;}
- const result=new Uint8Array(total);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}
- return validate(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(result)));
+ const params=new URLSearchParams(fragment);
+ if(params.get('v')!=='1')throw Error('Unsupported builder link version.');
+ const state=defaults();
+ const steps=new Map();
+ const seen=new Set();
+ for(const [key,value] of params){
+  if(seen.has(key))throw Error('Duplicate recipe parameter: '+key);
+  seen.add(key);
+  if(key==='v'||key==='steps')continue;
+  if(recipeFields.includes(key)){
+   state[key]=value;
+   continue;
+  }
+  const match=/^step\.([1-9][0-9]?)\.([a-zA-Z]+)$/.exec(key);
+  if(!match||Number(match[1])>40)throw Error('Invalid recipe parameter: '+key);
+  const index=Number(match[1]);
+  if(!steps.has(index))steps.set(index,new Map());
+  steps.get(index).set(match[2],value);
+ }
+ if(params.has('steps')){
+  if(params.get('steps')!=='0'||steps.size)throw Error('Use steps=0 to clear all steps.');
+  state.steps=[];
+ }else if(steps.size){
+  state.steps=[];
+  for(let index=1;index<=steps.size;index++){
+   const fields=steps.get(index);
+   if(!fields)throw Error('Recipe steps must be numbered consecutively from 1.');
+   const template=library.find(item=>item.kind===fields.get('kind'));
+   if(!template)throw Error('Unknown recipe step.');
+   const step={...template};
+   for(const [field,value] of fields){
+    if(field==='kind')continue;
+    if(!stepFields[step.kind].includes(field))throw Error('Invalid step field: '+field);
+    if(typeof template[field]==='boolean'){
+     if(value!=='true'&&value!=='false')throw Error('Invalid Git option.');
+     step[field]=value==='true';
+    }else{
+     step[field]=value;
+    }
+   }
+   state.steps.push(step);
+  }
+ }
+ return validate(state);
 }

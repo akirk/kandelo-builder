@@ -17,10 +17,10 @@ test('Git output is opt-in while README output remains visible',()=>{const s=def
 
 test('duplicate comparison matches settings rather than just step kind',()=>{const git={...library.find(l=>l.kind==='git')};assert.equal(sameStep(git,{...git,name:'different metadata'}),true);assert.equal(sameStep(git,{...git,printReadme:true}),false);assert.equal(sameStep(git,{...git,url:'https://github.com/example/other.git'}),false);assert.equal(sameStep({kind:'command',code:'ls'},{kind:'command',code:'pwd'}),false);assert.equal(sameStep({kind:'file',path:'/a',content:'a'},{kind:'file',path:'/a',content:'b'}),false);});
 
-test('builder URL round-trips editable settings and rejects bad links',async()=>{const s=defaults();s.title='Shared 🌱';s.prompt='custom';s.customPs1=String.raw`\t \w > `;s.steps.push({...library.find(l=>l.kind==='git'),printReadme:true});const fragment=await encodeRecipe(s);assert.deepEqual(await decodeRecipe(fragment),s);await assert.rejects(()=>decodeRecipe('recipe2=abc'));await assert.rejects(()=>decodeRecipe('recipe1=not-valid'));await assert.rejects(()=>decodeRecipe('recipe1='+'a'.repeat(90000)));});
+test('builder URL round-trips editable settings and rejects bad links',async()=>{const s=defaults();s.title='Shared 🌱';s.prompt='custom';s.customPs1=String.raw`\t \w > `;s.steps.push({...library.find(l=>l.kind==='git'),printReadme:true});const fragment=await encodeRecipe(s);assert.deepEqual(await decodeRecipe(fragment),s);await assert.rejects(()=>decodeRecipe('v=2'));await assert.rejects(()=>decodeRecipe('recipe1=not-valid'));await assert.rejects(()=>decodeRecipe('v=1&step.41.kind=command'));});
 
 
-test('default recipe keeps a clean builder URL, including after reverting edits',async()=>{const s=defaults();assert.equal(await encodeRecipe(s),'');assert.deepEqual(await decodeRecipe(''),s);s.steps[0].code+='\necho edited';assert.match(await encodeRecipe(s),/^recipe1=/);s.steps[0]={...defaults().steps[0]};assert.equal(await encodeRecipe(s),'');s.title='Renamed';assert.match(await encodeRecipe(s),/^recipe1=/);s.title=defaults().title;assert.equal(await encodeRecipe(s),'');s.steps.reverse();assert.match(await encodeRecipe(s),/^recipe1=/);});
+test('default recipe keeps a clean builder URL, including after reverting edits',async()=>{const s=defaults();assert.equal(await encodeRecipe(s),'');assert.deepEqual(await decodeRecipe(''),s);s.steps[0].code+='\necho edited';assert.match(await encodeRecipe(s),/^v=1&/);s.steps[0]={...defaults().steps[0]};assert.equal(await encodeRecipe(s),'');s.title='Renamed';assert.match(await encodeRecipe(s),/^v=1&/);s.title=defaults().title;assert.equal(await encodeRecipe(s),'');s.steps.reverse();assert.match(await encodeRecipe(s),/^v=1&/);});
 
 test('dotfiles validate mappings, preserve settings in links, and load before prompt override',async()=>{
  const step={...library.find(l=>l.kind==='dotfiles'),url:'https://github.com/example/dotfiles.git',revision:'release/v1',mappings:"bash/.bashrc -> ~/.bashrc\nconfig/git -> ~/.config/git"};const s=defaults();s.steps=[step];s.prompt='green';
@@ -53,3 +53,31 @@ test('legacy default recipes without prompt fields keep a clean URL',async()=>{c
  assert.equal(sameStep(step,{...step,game:'steel-sky'}),false);
  for(const game of ['unknown','steel-sky; touch /tmp/no',undefined])assert.throws(()=>validate({...s,steps:[{...step,game}]}));
  });
+
+test('builder parameters omit defaults and preserve explicit empty recipes',async()=>{
+ const state=defaults();
+ state.title='Demo';
+ assert.equal(await encodeRecipe(state),'v=1&title=Demo');
+ assert.deepEqual(await decodeRecipe('v=1&title=Demo'),state);
+ state.steps=[];
+ assert.equal(await encodeRecipe(state),'v=1&title=Demo&steps=0');
+ assert.deepEqual(await decodeRecipe(await encodeRecipe(state)),state);
+});
+
+test('numbered builder steps expose content and omit default options',async()=>{
+ const state=defaults();
+ state.steps=[{...library.find(step=>step.kind==='git'),enterDirectory:false},
+  {...library.find(step=>step.kind==='command'),code:'pwd\nprintf "%s" "🌱 + & # ="'}];
+ const fragment=await encodeRecipe(state);
+ const params=new URLSearchParams(fragment);
+ assert.equal(params.get('step.1.enterDirectory'),'false');
+ assert.equal(params.has('step.1.showOutput'),false);
+ assert.equal(params.get('step.2.code'),state.steps[1].code);
+ assert.deepEqual(await decodeRecipe(fragment),state);
+ assert.equal((await decodeRecipe('v=1&step.1.kind=git')).steps[0].enterDirectory,true);
+ for(const invalid of ['title=Demo','v=1&title=A&title=B','v=1&step.2.kind=command',
+  'v=1&steps=0&step.1.kind=command','v=1&step.1.kind=git&step.1.showOutput=maybe',
+  'v=1&step.1.kind=command&step.1.path=%2Ftmp']){
+  await assert.rejects(()=>decodeRecipe(invalid));
+ }
+});
