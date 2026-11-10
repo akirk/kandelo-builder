@@ -41,5 +41,11 @@ await page.reload();await page.getByLabel('File mappings').waitFor();assert.equa
 await page.screenshot({path:'/tmp/kandelo-builder-desktop.png',fullPage:true});
 await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
 await page.screenshot({path:'/tmp/kandelo-builder-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
+page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'Reset to defaults'}).click();assert.ok(new URL(page.url()).hash.startsWith('#recipe1='));
+page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Reset to defaults'}).click();
+await page.waitForFunction(()=>location.hash===''&&document.querySelector('#builder-link').value===location.href&&document.querySelector('#step-count').textContent==='2 steps');
+assert.equal(await page.evaluate(()=>localStorage.getItem('kandelo-builder.recipe.v1')),null);assert.equal(await page.getByLabel('Computer name').inputValue(),'My little computer');assert.equal(await page.getByLabel('Prompt style').inputValue(),'image');
+await page.reload();await page.waitForFunction(()=>document.querySelector('#link').value.includes('#k1='));assert.equal(new URL(page.url()).hash,'');assert.equal(await page.getByLabel('Prompt style').locator('option',{hasText:'My saved prompt'}).count(),1);
+
 console.log('Browser checks passed: generate, add, reorder, remove, switch VFS, persist, rename, mobile layout; no page errors.');
 }finally{await browser.close();}

@@ -43,3 +43,5 @@ test('dotfiles generated Bash links files and directories and keeps existing bac
  assert.equal(await fs.readFile(path.join(home,'.bashrc'),'utf8'),'alias hi="echo hello"\n');assert.equal(await fs.readFile(path.join(home,'.bashrc.kandelo-backup.1'),'utf8'),'original');assert.equal(await fs.readFile(path.join(home,'.bashrc.kandelo-backup'),'utf8'),'older');assert.ok((await fs.lstat(path.join(home,'.config/git'))).isSymbolicLink());assert.match(await fs.readFile(path.join(home,'git-calls'),'utf8'),/checkout --quiet --detach FETCH_HEAD/);
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
+
+test('legacy default recipes without prompt fields keep a clean URL',async()=>{const s=defaults();delete s.prompt;delete s.customPs1;assert.equal(await encodeRecipe(s),'');});
