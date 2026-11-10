@@ -26,7 +26,7 @@ $('#save-prompt').onclick=()=>{const value=$('#custom-ps1').value;if(value.lengt
 $('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(current.url);$('#status').textContent='Launch link copied.';}catch{$('#link').focus();$('#link').select();$('#status').textContent='Select and copy the launch link above.';}};
 $('#export').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a',{href:url,download:'kandelo-recipe.json'});a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('#import').onclick=()=>$('#file').click();$('#file').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>300000)throw Error('Recipe file exceeds 300 KB.');const next=validate(JSON.parse(await f.text()));state=structuredClone(next);render();save();$('#status').textContent='Recipe imported. Review its commands before running.';}catch(err){$('#status').textContent=err.message;}e.target.value='';};
-$('#reset').onclick=()=>{if(confirm('Replace your current recipe with a fresh draft?')){state=defaults();render();save();}};
+$('#reset').onclick=()=>{if(confirm('Reset the recipe to defaults? This replaces your current draft. Saved prompts are kept.')){state=defaults();sharedLoadError='';try{localStorage.removeItem(key);}catch{}const cleanUrl=new URL(location.href);cleanUrl.hash='';history.replaceState(null,'',cleanUrl.href);render();$('#status').textContent='Reset to defaults. Saved draft and recipe URL cleared.';}};
 render();if(sharedLoadError)$('#status').textContent=sharedLoadError;
 
 }
