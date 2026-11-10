@@ -27,7 +27,7 @@ For another static host, run `npm run build` and serve `dist/` over HTTP(S). Do 
 - Live generated Bash script and inspectable boot descriptor.
 - Copy launch URL and open Kandelo in a separate tab.
 - Local draft persistence and versioned JSON recipe export/import.
-- The browser address automatically updates with a compressed `#recipe1=` configuration; Copy builder link shares the editable recipe. A shared URL takes precedence over the recipient’s local draft. Saved prompt libraries stay local; the recipe carries its selected PS1 value. Builder links work on GitHub Pages without server routes.
+- The browser address stays clean for the default recipe and updates with a compressed `#recipe1=` configuration when the recipe changes; Copy builder link shares the editable recipe. A shared URL takes precedence over the recipient’s local draft. Saved prompt libraries stay local; the recipe carries its selected PS1 value. Builder links work on GitHub Pages without server routes.
 - Editable Kandelo host, image directory and working directory.
 
 Every generated script clears startup output before running recipe steps, including an empty recipe. The welcome step also clears the terminal before showing its message, like the welcome demo in `../kandelo-demos`. Kandelo itself prints the full startup script before executing it.

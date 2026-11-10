@@ -98,8 +98,9 @@ export async function build(state){
  const url=webUrl(state.host);url.hash='k1='+b64(packed);return {script,descriptor,url:url.href};
 }
 
-export async function encodeRecipe(state){validate(state);const raw=enc.encode(JSON.stringify(state));if(raw.length>300000)throw Error('Recipe exceeds the 300 KB builder link limit.');const packed=await gzip(raw);if(packed.length>65536)throw Error('Recipe is too large for a builder link. Export it instead.');return 'recipe1='+b64(packed);}
+export async function encodeRecipe(state){validate(state);const base=defaults();if(Object.keys(base).every(key=>key==='steps'?state.steps.length===base.steps.length&&state.steps.every((step,i)=>sameStep(step,base.steps[i])):state[key]===base[key]))return '';const raw=enc.encode(JSON.stringify(state));if(raw.length>300000)throw Error('Recipe exceeds the 300 KB builder link limit.');const packed=await gzip(raw);if(packed.length>65536)throw Error('Recipe is too large for a builder link. Export it instead.');return 'recipe1='+b64(packed);}
 export async function decodeRecipe(fragment){
+ if(!fragment)return defaults();
  if(!fragment.startsWith('recipe1='))throw Error('Unsupported builder link version.');
  const encoded=fragment.slice(8);if(encoded.length>87384||!/^[A-Za-z0-9_-]+$/.test(encoded))throw Error('Invalid or oversized builder link.');
  const bytes=Uint8Array.from(atob(encoded.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
