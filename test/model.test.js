@@ -21,3 +21,25 @@ test('builder URL round-trips editable settings and rejects bad links',async()=>
 
 
 test('default recipe keeps a clean builder URL, including after reverting edits',async()=>{const s=defaults();assert.equal(await encodeRecipe(s),'');assert.deepEqual(await decodeRecipe(''),s);s.steps[0].code+='\necho edited';assert.match(await encodeRecipe(s),/^recipe1=/);s.steps[0]={...defaults().steps[0]};assert.equal(await encodeRecipe(s),'');s.title='Renamed';assert.match(await encodeRecipe(s),/^recipe1=/);s.title=defaults().title;assert.equal(await encodeRecipe(s),'');s.steps.reverse();assert.match(await encodeRecipe(s),/^recipe1=/);});
+
+test('dotfiles validate mappings, preserve settings in links, and load before prompt override',async()=>{
+ const step={...library.find(l=>l.kind==='dotfiles'),url:'https://github.com/example/dotfiles.git',revision:'release/v1',mappings:"bash/.bashrc -> ~/.bashrc\nconfig/git -> ~/.config/git"};const s=defaults();s.steps=[step];s.prompt='green';
+ assert.deepEqual(await decodeRecipe(await encodeRecipe(s)),s);
+ const script=compile(s);assert.match(script,/fetch --quiet --depth=1 origin 'release\/v1'/);assert.match(script,/checkout --quiet --detach FETCH_HEAD/);assert.ok(script.indexOf('. "$HOME/.bashrc"')<script.indexOf('export PS1='));
+ const {spawnSync}=await import('node:child_process');assert.equal(spawnSync('bash',['-n'],{input:script}).status,0);
+ for(const mappings of ['../outside -> ~/.bashrc','.bashrc -> ~/../outside','.bashrc -> /etc/profile','.bashrc -> ~/.dotfiles/repo','.bashrc -> ~/.config/kandelo-builder/bashrc','.bashrc -> ~/.config\n.inputrc -> ~/.config/git','.bashrc -> ~/.bashrc\n.inputrc -> ~/.bashrc',''])assert.throws(()=>compile({...s,steps:[{...step,mappings}]}));
+ assert.equal(sameStep(step,{...step}),true);assert.equal(sameStep(step,{...step,revision:'main'}),false);assert.equal(sameStep(step,{...step,mappings:'.inputrc -> ~/.inputrc'}),false);
+ assert.match(compile({...s,prompt:'image'}),/exec bash -i/);
+});
+
+test('dotfiles generated Bash links files and directories and keeps existing backups',async()=>{
+ const fs=await import('node:fs/promises');const os=await import('node:os');const path=await import('node:path');const {spawnSync}=await import('node:child_process');
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'kandelo-dotfiles-'));
+ try{
+ const home=path.join(root,'home'),bin=path.join(root,'bin'),fixture=path.join(root,'fixture');await fs.mkdir(home);await fs.mkdir(bin);await fs.mkdir(path.join(fixture,'bash'),{recursive:true});await fs.mkdir(path.join(fixture,'git config'));await fs.writeFile(path.join(fixture,'bash',"my rc's"),'alias hi="echo hello"\n');await fs.writeFile(path.join(fixture,'git config','config'),'[core]\n');await fs.writeFile(path.join(home,'.bashrc'),'original');await fs.writeFile(path.join(home,'.bashrc.kandelo-backup'),'older');
+ await fs.writeFile(path.join(bin,'git'),'#!/bin/bash\nif [ "$1" = clone ]; then cp -R "$DOTFILES_FIXTURE" "${@: -1}"; else printf "%s\\n" "$*" >> "$HOME/git-calls"; fi\n',{mode:0o755});
+ const s=defaults();s.cwd=home;s.steps=[{...library.find(l=>l.kind==='dotfiles'),revision:'abc123',mappings:"bash/my rc's -> ~/.bashrc\ngit config -> ~/.config/git"}];
+ const script=compile(s).replace(/exec bash -i\n$/,'');const result=spawnSync('bash',[],{input:script,encoding:'utf8',env:{...process.env,HOME:home,PATH:bin+':'+process.env.PATH,TERM:'xterm',DOTFILES_FIXTURE:fixture}});assert.equal(result.status,0,result.stderr);
+ assert.equal(await fs.readFile(path.join(home,'.bashrc'),'utf8'),'alias hi="echo hello"\n');assert.equal(await fs.readFile(path.join(home,'.bashrc.kandelo-backup.1'),'utf8'),'original');assert.equal(await fs.readFile(path.join(home,'.bashrc.kandelo-backup'),'utf8'),'older');assert.ok((await fs.lstat(path.join(home,'.config/git'))).isSymbolicLink());assert.match(await fs.readFile(path.join(home,'git-calls'),'utf8'),/checkout --quiet --detach FETCH_HEAD/);
+ }finally{await fs.rm(root,{recursive:true,force:true});}
+});

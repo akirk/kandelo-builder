@@ -28,11 +28,13 @@ export const library = [
  {kind:'file',name:'Create a file',description:'Put your own content in the filesystem',icon:'▤',requires:'bash',path:'/home/maker/hello.txt',content:'Hello from Kandelo!\n'},
  {kind:'python',name:'Run Python',description:'A little code, a lot of possibilities',icon:'Py',requires:'python',code:'import sys\nprint("Hello from Python!")\nprint(sys.version)'},
  {kind:'git',name:'Clone a repository',description:'Bring a project into your computer',icon:'⑂',requires:'git',url:'https://github.com/akirk/kandelo-demos.git',directory:'',enterDirectory:true,printReadme:false,showOutput:false},
+ {kind:'dotfiles',name:'Bring my dotfiles',description:'Your aliases, shortcuts and shell settings',icon:'~/',requires:'git',url:'https://github.com/your-name/dotfiles.git',revision:'',mappings:'.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc'},
  {kind:'perl',name:'Run Perl',description:'Execute a Perl script on startup',icon:'pl',requires:'perl',code:'print "Hello from Perl!\\n";'},
 ];
 // Compare effective settings, ignoring display metadata and object key order.
 export function sameStep(a,b){
  if(a.kind!==b.kind)return false;
+ if(a.kind==='dotfiles')return a.url===b.url&&(a.revision||'')===(b.revision||'')&&a.mappings===b.mappings;
  if(a.kind==='file')return a.path===b.path&&a.content===b.content;
  if(a.kind==='git')return a.url===b.url&&(a.directory||'')===(b.directory||'')&&!!a.enterDirectory===!!b.enterDirectory&&!!a.printReadme===!!b.printReadme&&!!a.showOutput===!!b.showOutput;
  return a.code===b.code;
@@ -41,6 +43,21 @@ export const defaults = () => ({version:1,title:'My little computer',image:'shel
 export const quote = s => "'"+s.replaceAll("'", "'\\''")+"'";
 function absolute(s){return typeof s==='string' && s.startsWith('/') && !s.includes('\0') && !s.includes('\\') && (s==='/' || !s.slice(1).split('/').some(p=>!p||p==='.'||p==='..'));}
 function webUrl(s){const u=new URL(s);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)throw Error('Use an HTTP(S) URL without credentials.');return u;}
+export function dotfileMappings(text){
+ if(typeof text!=='string'||text.length>16000||text.includes('\0'))throw Error('Provide dotfile mappings (up to 16 KB).');
+ const lines=text.split('\n').map(line=>line.trim()).filter(Boolean);
+ if(!lines.length||lines.length>50)throw Error('Provide between 1 and 50 dotfile mappings.');
+ const seen=new Set();
+ return lines.map(line=>{const parts=line.split('->').map(p=>p.trim());
+ if(parts.length!==2)throw Error('Use source -> ~/destination for each dotfile mapping.');
+ const [source,target]=parts,destination=target.startsWith('~/')?target.slice(2):'';
+ const valid=path=>path&&!path.startsWith('/')&&!/[\\\0\r\n]/.test(path)&&!path.split('/').some(p=>!p||p==='.'||p==='..');
+ if(!valid(source)||!valid(destination))throw Error('Dotfile sources must be repository-relative and destinations must start with ~/ without dot segments.');
+ if(destination==='.dotfiles'||destination.startsWith('.dotfiles/')||destination==='.config'||destination==='.config/kandelo-builder'||destination.startsWith('.config/kandelo-builder/'))throw Error('This destination is reserved for builder files.');
+ if([...seen].some(p=>p===destination||p.startsWith(destination+'/')||destination.startsWith(p+'/')))throw Error('Dotfile destinations must not overlap.');
+ seen.add(destination);return {source,destination};
+ });
+}
 export function validate(s){
  if(!s||s.version!==1||!images.some(i=>i.id===s.image))throw Error('Unsupported recipe version or filesystem.');
  for(const k of ['title','host','imageBase','cwd','customVfs'])if(typeof s[k]!=='string'||s[k].length>8192)throw Error('Invalid '+k);
@@ -52,18 +69,31 @@ export function validate(s){
  if(!Array.isArray(s.steps)||s.steps.length>40)throw Error('A recipe may have up to 40 steps.');
  for(const step of s.steps){if(!library.some(l=>l.kind===step.kind))throw Error('Unknown recipe step.');for(const k of ['code','content','path','url'])if(step[k]!==undefined&&(typeof step[k]!=='string'||step[k].includes('\0')||step[k].length>100000))throw Error('Invalid step '+k);
  if(step.kind==='file'&&(!absolute(step.path)||step.path==='/'))throw Error('Files need an absolute file path without dot segments.');
+ if(step.kind==='dotfiles'){
+ webUrl(step.url);
+ if(typeof step.revision!=='string'||step.revision.length>255||step.revision.includes('\0')||step.revision.startsWith('-')||/[\r\n]/.test(step.revision))throw Error('Use a branch, tag or commit as the dotfiles revision.');
+ dotfileMappings(step.mappings);
+ }
  if(step.kind==='git'){
  webUrl(step.url);
  if(step.directory!==undefined&&(typeof step.directory!=='string'||step.directory.length>255||step.directory.includes('\0')||step.directory.includes('/')||step.directory.includes('\\')||['.','..'].includes(step.directory)))throw Error('Clone directory must be a single folder name.');
  for(const option of ['enterDirectory','printReadme','showOutput'])if(step[option]!==undefined&&typeof step[option]!=='boolean')throw Error('Invalid Git option.');
  }
- if(step.kind==='file'&&typeof step.content!=='string'||!['file','git'].includes(step.kind)&&typeof step.code!=='string')throw Error('Missing step content.');}
+ if(step.kind==='file'&&typeof step.content!=='string'||!['file','git','dotfiles'].includes(step.kind)&&typeof step.code!=='string')throw Error('Missing step content.');}
  return s;
 }
 function heredoc(content,index){let delimiter=`KANDELO_STEP_${index}`;while(content.split('\n').includes(delimiter))delimiter+='_';return {delimiter,body:content.endsWith('\n')?content:content+'\n'};}
 export function compile(state){validate(state);return '#!/bin/bash\nset -e\nclear\ncd '+quote(state.cwd)+'\n\n'+state.steps.map((s,i)=>{
  const name=library.find(l=>l.kind===s.kind).name;
  if(s.kind==='file'){const h=heredoc(s.content,i);const parent=s.path.slice(0,s.path.lastIndexOf('/'))||'/';return `# ${i+1}. ${name}\nmkdir -p ${quote(parent)}\ncat > ${quote(s.path)} <<'${h.delimiter}'\n${h.body}${h.delimiter}\n`;}
+ if(s.kind==='dotfiles'){
+ const mappings=dotfileMappings(s.mappings);
+ let code=`# ${i+1}. ${name}\n(\nset -e\nrepo="$HOME/.dotfiles/step-${i+1}"\nmkdir -p "$HOME/.dotfiles"\ngit clone --quiet -- ${quote(s.url)} "$repo" > /dev/null\n`;
+ if(s.revision.trim())code+=`git -C "$repo" fetch --quiet --depth=1 origin ${quote(s.revision.trim())}\ngit -C "$repo" checkout --quiet --detach FETCH_HEAD\n`;
+ for(const {source} of mappings)code+=`if [ ! -e "$repo"/${quote(source)} ]; then printf '%s\\n' ${quote('Missing dotfile: '+source)} >&2; exit 1; fi\n`;
+ for(const {source,destination} of mappings){code+=`target="$HOME"/${quote(destination)}\nmkdir -p "$(dirname "$target")"\nif [ -e "$target" ] || [ -L "$target" ]; then\n  backup="$target.kandelo-backup"\n  n=1\n  while [ -e "$backup" ] || [ -L "$backup" ]; do backup="$target.kandelo-backup.$n"; n=$((n + 1)); done\n  mv -- "$target" "$backup"\nfi\nln -s -- "$repo"/${quote(source)} "$target"\n`;}
+ return code+')\n';
+ }
  if(s.kind==='git'){
  const directory=s.directory?.trim()||decodeURIComponent(new URL(s.url).pathname.split('/').filter(Boolean).at(-1)||'repository').replace(/\.git$/,'');
  if(!directory||directory==='.'||directory==='..'||/[\/\\\0]/.test(directory))throw Error('Specify a valid clone folder name.');
@@ -77,11 +107,11 @@ export function compile(state){validate(state);return '#!/bin/bash\nset -e\nclea
  }).join('\n')+compilePrompt(state);}
 function compilePrompt(state){
  const preset=prompts.find(p=>p.id===(state.prompt||'image'));
- if(state.prompt===undefined||state.prompt==='image')return state.steps.some(s=>s.kind==='git'&&s.enterDirectory)?'\n# Keep the cloned working directory in your interactive session\nexec bash -i\n':'';
+ if(state.prompt===undefined||state.prompt==='image')return state.steps.some(s=>s.kind==='dotfiles'||s.kind==='git'&&s.enterDirectory)?'\n# Keep the cloned working directory in your interactive session\nexec bash -i\n':'';
  const ps1=state.prompt==='custom'?(state.customPs1||''):preset.value;
  // A child startup script cannot change its parent shell's prompt. Hand off
  // after all recipe steps, using a dedicated rc file as in the welcome demo.
- const rc='export PS1='+quote(ps1);
+ const rc=(state.steps.some(s=>s.kind==='dotfiles')?'if [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi\n':'')+'export PS1='+quote(ps1);
  return '\n# Start an interactive Bash session with your selected prompt\nmkdir -p "$HOME/.config/kandelo-builder"\nprintf \'%s\\n\' '+quote(rc)+' > "$HOME/.config/kandelo-builder/bashrc"\nexec bash --noprofile --rcfile "$HOME/.config/kandelo-builder/bashrc" -i\n';
 }
 
