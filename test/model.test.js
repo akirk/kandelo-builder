@@ -45,3 +45,11 @@ test('dotfiles generated Bash links files and directories and keeps existing bac
 });
 
 test('legacy default recipes without prompt fields keep a clean URL',async()=>{const s=defaults();delete s.prompt;delete s.customPs1;assert.equal(await encodeRecipe(s),'');});
+
+ test('ScummVM launch uses the shell image and preserves game selection in shared recipes',async()=>{
+ const s=defaults(),step={...library.find(l=>l.kind==='scummvm')};s.steps=[step];
+ const result=await build(s);assert.match(result.script,/scummvm-play steel-sky\n/);assert.match(result.descriptor.mounts[0].ref,/shell.vfs.zst$/);
+ step.game='mystery-house';assert.deepEqual(await decodeRecipe(await encodeRecipe(s)),s);assert.match(compile(s),/scummvm-play mystery-house/);
+ assert.equal(sameStep(step,{...step,game:'steel-sky'}),false);
+ for(const game of ['unknown','steel-sky; touch /tmp/no',undefined])assert.throws(()=>validate({...s,steps:[{...step,game}]}));
+ });

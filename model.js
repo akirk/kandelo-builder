@@ -1,3 +1,110 @@
+// Game IDs and titles from Kandelo’s scummvm-freeware-games.json.
+export const scummvmGames = [
+ {
+  "id": "steel-sky",
+  "title": "Beneath a Steel Sky"
+ },
+ {
+  "id": "drascula",
+  "title": "Dráscula: The Vampire Strikes Back"
+ },
+ {
+  "id": "dreamweb",
+  "title": "DreamWeb"
+ },
+ {
+  "id": "fotaq",
+  "title": "Flight of the Amazon Queen"
+ },
+ {
+  "id": "god-of-thunder",
+  "title": "God of Thunder"
+ },
+ {
+  "id": "griffon",
+  "title": "The Griffon Legend"
+ },
+ {
+  "id": "lure",
+  "title": "Lure of the Temptress"
+ },
+ {
+  "id": "mystery-house",
+  "title": "Hi-Res Adventure #1: Mystery House"
+ },
+ {
+  "id": "nippon-safes",
+  "title": "Nippon Safes, Inc."
+ },
+ {
+  "id": "sfinx",
+  "title": "Sfinx"
+ },
+ {
+  "id": "soltys",
+  "title": "Sołtys"
+ },
+ {
+  "id": "above-the-waves",
+  "title": "Above the Waves"
+ },
+ {
+  "id": "cubert-badbone",
+  "title": "Cubert Badbone, P.I."
+ },
+ {
+  "id": "frasse",
+  "title": "Frasse and the Peas of Kejick"
+ },
+ {
+  "id": "full-moon",
+  "title": "Full Moon"
+ },
+ {
+  "id": "the-interview",
+  "title": "The Interview"
+ },
+ {
+  "id": "leptons-quest",
+  "title": "Lepton's Quest"
+ },
+ {
+  "id": "life-flashes-by",
+  "title": "Life Flashes By"
+ },
+ {
+  "id": "mandy-christmas",
+  "title": "Mandy Christmas Adventure"
+ },
+ {
+  "id": "nathans-second-chance",
+  "title": "Nathan's Second Chance"
+ },
+ {
+  "id": "out-of-order",
+  "title": "Out of Order"
+ },
+ {
+  "id": "robins-rescue",
+  "title": "Robin's Rescue"
+ },
+ {
+  "id": "sam-and-max-flintlocked",
+  "title": "Sam and Max Flintlocked"
+ },
+ {
+  "id": "cruise-ship",
+  "title": "The Game That Takes Place on a Cruise Ship"
+ },
+ {
+  "id": "tremendous-corporation",
+  "title": "The Secret of Tremendous Corporation"
+ },
+ {
+  "id": "wage-collection",
+  "title": "World Builder (WAGE) game collection"
+ }
+];
 export const prompts = [
  {id:'image',name:'Image default',value:''},
  {id:'classic',name:'Classic · maker@kandelo:~$',value:String.raw`\u@\h:\w\$ `},
@@ -7,7 +114,7 @@ export const prompts = [
  {id:'time',name:'Time · HH:MM:SS ~ $',value:String.raw`\t \w \$ `},
 ];
 export const images = [
- {id:'shell',name:'Everyday shell',icon:'>_',file:'shell.vfs.zst',description:'Bash, core utilities, Python & Git',tools:['bash','python','git']},
+ {id:'shell',name:'Everyday shell',icon:'>_',file:'shell.vfs.zst',description:'Bash, core utilities, Python & Git',tools:['bash','python','git','scummvm-play']},
  {id:'python',name:'Python workspace',icon:'Py',file:'python.vfs.zst',description:'A focused Python environment',tools:['bash','python']},
  {id:'perl',name:'Perl workspace',icon:'pl',file:'perl.vfs.zst',description:'Perl and its standard library',tools:['bash','perl']},
  {id:'nginx',name:'Nginx',icon:'>_',file:'nginx.vfs.zst',description:'HTTP server',tools:['bash']},
@@ -30,10 +137,12 @@ export const library = [
  {kind:'git',name:'Clone a repository',description:'Bring a project into your computer',icon:'⑂',requires:'git',url:'https://github.com/akirk/kandelo-demos.git',directory:'',enterDirectory:true,printReadme:false,showOutput:false},
  {kind:'dotfiles',name:'Bring my dotfiles',description:'Your aliases, shortcuts and shell settings',icon:'~/',requires:'git',url:'https://github.com/your-name/dotfiles.git',revision:'',mappings:'.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc'},
  {kind:'perl',name:'Run Perl',description:'Execute a Perl script on startup',icon:'pl',requires:'perl',code:'print "Hello from Perl!\\n";'},
+ {kind:'scummvm',name:'Play a ScummVM game',description:'Launch a freeware adventure · Beneath a Steel Sky & more',icon:'🎮',requires:'scummvm-play',game:'steel-sky'},
 ];
 // Compare effective settings, ignoring display metadata and object key order.
 export function sameStep(a,b){
  if(a.kind!==b.kind)return false;
+ if(a.kind==='scummvm')return a.game===b.game;
  if(a.kind==='dotfiles')return a.url===b.url&&(a.revision||'')===(b.revision||'')&&a.mappings===b.mappings;
  if(a.kind==='file')return a.path===b.path&&a.content===b.content;
  if(a.kind==='git')return a.url===b.url&&(a.directory||'')===(b.directory||'')&&!!a.enterDirectory===!!b.enterDirectory&&!!a.printReadme===!!b.printReadme&&!!a.showOutput===!!b.showOutput;
@@ -79,12 +188,14 @@ export function validate(s){
  if(step.directory!==undefined&&(typeof step.directory!=='string'||step.directory.length>255||step.directory.includes('\0')||step.directory.includes('/')||step.directory.includes('\\')||['.','..'].includes(step.directory)))throw Error('Clone directory must be a single folder name.');
  for(const option of ['enterDirectory','printReadme','showOutput'])if(step[option]!==undefined&&typeof step[option]!=='boolean')throw Error('Invalid Git option.');
  }
- if(step.kind==='file'&&typeof step.content!=='string'||!['file','git','dotfiles'].includes(step.kind)&&typeof step.code!=='string')throw Error('Missing step content.');}
+ if(step.kind==='scummvm'&&!scummvmGames.some(g=>g.id===step.game))throw Error('Choose a supported ScummVM game.');
+ if(step.kind==='file'&&typeof step.content!=='string'||!['file','git','dotfiles','scummvm'].includes(step.kind)&&typeof step.code!=='string')throw Error('Missing step content.');}
  return s;
 }
 function heredoc(content,index){let delimiter=`KANDELO_STEP_${index}`;while(content.split('\n').includes(delimiter))delimiter+='_';return {delimiter,body:content.endsWith('\n')?content:content+'\n'};}
 export function compile(state){validate(state);return '#!/bin/bash\nset -e\nclear\ncd '+quote(state.cwd)+'\n\n'+state.steps.map((s,i)=>{
  const name=library.find(l=>l.kind===s.kind).name;
+ if(s.kind==='scummvm')return `# ${i+1}. ${name}\nscummvm-play ${s.game}\n`;
  if(s.kind==='file'){const h=heredoc(s.content,i);const parent=s.path.slice(0,s.path.lastIndexOf('/'))||'/';return `# ${i+1}. ${name}\nmkdir -p ${quote(parent)}\ncat > ${quote(s.path)} <<'${h.delimiter}'\n${h.body}${h.delimiter}\n`;}
  if(s.kind==='dotfiles'){
  const mappings=dotfileMappings(s.mappings);

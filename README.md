@@ -26,6 +26,7 @@ For another static host, run `npm run build` and serve `dist/` over HTTP(S). Do 
 - Step types can be reused. Adding an ingredient is skipped when a step with identical effective settings already exists; edit the existing step before adding another of that type.
 - Editable steps with move-up/down and remove controls.
 - Live generated Bash script and inspectable boot descriptor.
+- ScummVM game picker for the Kandelo freeware catalog, defaulting to Beneath a Steel Sky (`scummvm-play steel-sky`). Adding it selects the shell image (custom images are kept). Game data downloads on first launch.
 - Copy launch URL and open Kandelo in a separate tab.
 - URL-based recipe state and versioned JSON recipe export/import.
 - The browser address stays clean for the default recipe and updates with a compressed `#recipe1=` configuration when the recipe changes; Copy builder link shares the editable recipe. The URL is the only source for the current recipe; opening the bare builder URL always starts with defaults. Legacy local recipe drafts are removed on startup. Saved prompt libraries stay local; the recipe carries its selected PS1 value. Builder links work on GitHub Pages without server routes.
