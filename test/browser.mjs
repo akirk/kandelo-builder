@@ -38,7 +38,7 @@ const sharedUrl=page.url();const recipient=await browser.newContext();const shar
 await page.getByRole('button',{name:'Bring my dotfiles Your aliases',exact:false}).click();
 await page.getByLabel('Dotfiles repository URL').fill('https://github.com/example/dotfiles.git');await page.getByLabel('Revision (optional)').fill('main');await page.getByLabel('File mappings').fill('bash/.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc');
 await page.waitForFunction(()=>document.querySelector('#script').textContent.includes('checkout --quiet --detach FETCH_HEAD'));
-await page.waitForFunction(async()=>{const {decodeRecipe}=await import('./model.js');const recipe=await decodeRecipe(location.hash.slice(1));return recipe.steps.some(s=>s.kind==='dotfiles'&&s.mappings==='bash/.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc');});
+await page.waitForFunction(()=>new URLSearchParams(location.hash.slice(1)).get('step.4.mappings')==='bash/.bashrc -> ~/.bashrc\n.inputrc -> ~/.inputrc');
 await page.reload();await page.getByLabel('File mappings').waitFor();assert.equal(await page.getByLabel('Revision (optional)').inputValue(),'main');
 await page.screenshot({path:'/tmp/kandelo-builder-desktop.png',fullPage:true});
 await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
